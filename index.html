@@ -114,7 +114,7 @@
   .m-mor i{background:linear-gradient(90deg,#b0405e,var(--mor)); box-shadow:0 0 10px rgba(232,104,138,.5);}
   .m-soul i{background:linear-gradient(90deg,#0c6b58,var(--emerald)); box-shadow:0 0 10px rgba(20,155,126,.55);}
 
-  #scene{position:relative; margin:0 14px; border-radius:18px; overflow:hidden; aspect-ratio:4/3; flex:0 0 auto; animation:floaty 6s ease-in-out infinite;}
+  #scene{position:relative; margin:0 14px; border-radius:18px; overflow:hidden; height:0; padding-bottom:75%; flex:0 0 auto; animation:floaty 6s ease-in-out infinite;}
   @keyframes floaty{0%,100%{transform:translateY(0);}50%{transform:translateY(-4px);}}
   #scene .placeholder{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; text-align:center; padding:16px;
     background:linear-gradient(135deg,#1c2031,#13141f),
@@ -123,12 +123,12 @@
   #scene .placeholder .loc{font-family:'Oswald'; letter-spacing:2px; font-size:12px; color:var(--gold-soft); text-transform:uppercase;}
   #scene .placeholder .ph-note{font-size:10.5px; color:#828aa3;}
   #scene img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .6s;}
-  #scene.vmode{aspect-ratio:4/3;}
+  #scene.vmode{padding-bottom:75%;}
   #scene video{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center top; opacity:0; transition:opacity .5s; z-index:2;}
-  .scene-play{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:6; display:none; width:76px; height:76px; border-radius:50%; cursor:pointer;
-    align-items:center; justify-content:center; padding-left:5px; font-size:26px; color:var(--gold-soft);
-    background:rgba(212,162,74,.16); border:1.5px solid var(--gold); backdrop-filter:blur(5px);
-    box-shadow:0 0 28px rgba(212,162,74,.55), inset 0 0 16px rgba(212,162,74,.15); animation:cta 2.2s ease-in-out infinite;}
+  .scene-play{position:absolute; right:10px; bottom:10px; z-index:6; display:none; width:46px; height:46px; border-radius:50%; cursor:pointer;
+    align-items:center; justify-content:center; font-size:19px; color:var(--gold-soft);
+    background:rgba(8,9,14,.6); border:1.5px solid var(--gold); backdrop-filter:blur(5px);
+    box-shadow:0 0 18px rgba(212,162,74,.5); animation:cta 2.4s ease-in-out infinite;}
   .scene-play.on{display:flex;}
   #scene .tag{position:absolute; left:11px; bottom:11px; z-index:3; font-family:'Oswald'; letter-spacing:1px; font-size:12px; color:var(--gold-soft); padding:5px 11px; border-radius:20px;
     background:rgba(8,9,14,.55); backdrop-filter:blur(6px); border:1px solid rgba(212,162,74,.35);}
@@ -341,22 +341,17 @@ function renderEvent(){
   ph.querySelector('.emoji').textContent=ev.emoji||'🏢';
   ph.querySelector('.loc').textContent=ev.loc||'';
   $('scene-tag').textContent=ev.tag||'';
-  // постер-фото (если есть)
-  if(ev.img){img.onload=()=>img.style.opacity=1;img.onerror=()=>img.style.opacity=0;img.src=ASSET_DIR+ev.img;}
-  // видео-вставка
+  // постер-фото (первый кадр под видео и для фото-событий)
+  if(ev.img){img.onload=()=>img.style.opacity=1;img.onerror=()=>img.style.opacity=0;img.src=ASSET_DIR+ev.img+'?v=3';}
+  // видео-вставка: играет сразу немым лупом; для диалоговых — кнопка звука
   if(ev.video){
     scene.classList.add('vmode');
-    const url=CLIP_DIR+ev.video;
-    if(ev.vtype==='loop'){            // немой авто-луп
-      vid.loop=true; vid.muted=true; vid.src=url; vid.style.opacity=1;
-      vid.play().catch(()=>{});
-    }else{                            // 'tap' — постер-фото + кнопка, по тапу со звуком
-      playBtn.classList.add('on');
-      playBtn.onclick=()=>{
-        playBtn.classList.remove('on');
-        vid.loop=false; vid.muted=false; vid.src=url; vid.style.opacity=1;
-        vid.play().catch(()=>{ vid.muted=true; vid.play().catch(()=>{}); });
-      };
+    vid.loop=true; vid.muted=true; vid.setAttribute('muted','');
+    vid.src=CLIP_DIR+ev.video+'?v=3'; vid.style.opacity=1;
+    vid.play().catch(()=>{});
+    if(ev.vtype==='tap'){
+      playBtn.textContent='🔊'; playBtn.classList.add('on');
+      playBtn.onclick=()=>{ vid.muted=false; try{vid.currentTime=0;}catch(e){} vid.play().catch(()=>{}); playBtn.classList.remove('on'); };
     }
   }
   $('title-ev').textContent=ev.title;
