@@ -169,6 +169,22 @@
   .end-note{font-size:12.5px; color:#9aa0b3; margin:8px 0 18px;}
   .end-score{font-family:'Oswald'; letter-spacing:1px; color:var(--gold-soft); font-size:16px; margin:4px 0 14px;}
   .stat-row{font-family:'Oswald'; letter-spacing:1px; color:#cdd2df; font-size:15px; margin:16px 0 18px;}
+  /* ===== PUZZLE ===== */
+  #screen-puzzle{justify-content:flex-start; align-items:center; padding:26px 18px 40px; position:relative;}
+  .pz-wrap{position:relative; z-index:1; width:100%; max-width:360px; text-align:center;}
+  #screen-puzzle h2{font-family:'Playfair Display',serif; font-weight:900; color:var(--gold); font-size:26px; margin-bottom:10px;}
+  #screen-puzzle p{font-size:14px; line-height:1.55; color:#e7e2d6; margin-bottom:12px;}
+  .pz-budget{font-family:'Oswald'; letter-spacing:1px; color:#e8688a; font-size:16px; margin:6px 0 14px;}
+  .pz-budget.ok{color:var(--emerald);}
+  .pz-row{display:flex; justify-content:space-between; align-items:center; gap:10px; background:rgba(255,255,255,.04); border:1px solid rgba(212,162,74,.18); border-radius:12px; padding:10px 12px; margin-bottom:9px;}
+  .pz-info{display:flex; align-items:center; gap:10px; text-align:left;}
+  .pz-ic{font-size:23px;}
+  .pz-name{font-weight:600; font-size:14.5px; color:var(--cream);}
+  .pz-hint{font-size:11.5px; color:#9aa0b3;}
+  .pz-stepper{display:flex; align-items:center; gap:9px;}
+  .pz-stepper button{width:34px; height:34px; border-radius:50%; border:1px solid var(--gold); background:rgba(212,162,74,.12); color:var(--gold-soft); font-size:18px; cursor:pointer;}
+  .pz-val{font-family:'Oswald'; font-size:17px; min-width:30px; color:#fff;}
+  .btn[disabled]{opacity:.4; pointer-events:none;}
 </style>
 </head>
 <body>
@@ -230,6 +246,9 @@
 
   <!-- END -->
   <section class="screen" id="screen-end"></section>
+
+  <!-- PUZZLE -->
+  <section class="screen" id="screen-puzzle"></section>
 </div>
 
 <script>
@@ -333,7 +352,7 @@ const EVENTS = {
     ]},
   week:{ loc:'КАМОРКА · КОНЕЦ НЕДЕЛИ', emoji:'🌙', tag:'Итог недели', video:'vid_ev08_night.mp4', vtype:'loop',
     title:'Первая неделя позади', text:'',
-    choices:[{label:'Закрыть неделю →',sub:'Посмотреть, что ты построил',end:true}] }
+    choices:[{label:'Перейти к задаче недели →',sub:'Свёрстать бюджет компании',puzzle:true}] }
 };
 
 /* ===== Движок ===== */
@@ -345,7 +364,11 @@ function fresh(){return{cur:'intro',m:{...START},flags:{},rel:{}};}
 function load(){try{return JSON.parse(localStorage.getItem(SAVE_KEY));}catch(e){return null;}}
 function save(){if(state)localStorage.setItem(SAVE_KEY,JSON.stringify(state));flashSaved();}
 
-function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));$(id).classList.add('active');}
+function show(id){
+  // уходя с игрового экрана — глушим и останавливаем видео сцены
+  if(id!=='screen-game'){ try{const v=$('scene-vid'); v.pause(); v.muted=true; v.removeAttribute('src'); v.load&&v.load();}catch(e){} }
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));$(id).classList.add('active');
+}
 
 function renderMetrics(){for(const k of['cap','rep','mor','soul']){$('v-'+k).textContent=Math.round(state.m[k]);$('b-'+k).style.width=clamp(state.m[k])+'%';}}
 
@@ -357,6 +380,7 @@ function applyChoice(ch){
   if(ch.rel)for(const r in ch.rel)state.rel[r]=(state.rel[r]||0)+ch.rel[r];
   if(ch.set)for(const f in ch.set)state.flags[f]=ch.set[f];
   showFloats(ch.fx,ch.rel); renderMetrics();
+  if(ch.puzzle)return startPuzzle();
   if(ch.end)return endSlice();
   state.cur=ch.next; save(); setTimeout(renderEvent,400);
 }
@@ -427,6 +451,7 @@ function consequenceLines(){
   if(f.bagiraEnemy) L.push('⚔️ Ты пошёл против Багиры — нажил умного и опасного врага.');
   if(f.riskyPR) L.push('✨ Вирусная акция Клео взлетела — шуму много, репутация на качелях.');
   if(f.sonyaMentor) L.push('📋 Ты поверил в Соню — у тебя появился преданный союзник на годы вперёд.');
+  if(f.puzzleTier) L.push(`🧩 Бюджет недели — ${f.puzzleTier}: ${f.puzzleMsg}`);
   if(!L.length) L.push('Ты прошёл неделю осторожно, не качнув ни одну чашу весов. Иногда это тоже выбор.');
   return L;
 }
@@ -445,6 +470,83 @@ function shareWeek(){
     else { try{navigator.clipboard.writeText(text);}catch(e){} alert('Результат скопирован:\n\n'+text); }
   }catch(e){}
 }
+/* ===== Головоломка недели №1: «Распредели бюджет» ===== */
+const DEPTS=[
+  {key:'log', name:'Логистика', icon:'📦'},
+  {key:'mkt', name:'Маркетинг', icon:'✨'},
+  {key:'dev', name:'Разработка', icon:'💻'},
+  {key:'hr',  name:'Команда',    icon:'❤️'},
+];
+const BUDGET=100, STEP=5;
+function genNeeds(){
+  let raw=DEPTS.map(()=>2+Math.floor(Math.random()*5));
+  let sum=raw.reduce((a,b)=>a+b,0);
+  let needs=raw.map(w=>Math.round(BUDGET*w/sum/STEP)*STEP);
+  needs[0]+=BUDGET-needs.reduce((a,b)=>a+b,0);
+  if(needs[0]<0){ needs[1]+=needs[0]; needs[0]=0; }
+  return needs;
+}
+function deptHint(i){
+  const p=state.puzzle, n=p.needs[i], avg=BUDGET/DEPTS.length;
+  if(p.reveal[i]) return `нужно ровно ${n}`;
+  if(n>=avg*1.3) return 'на пределе — просит много';
+  if(n<=avg*0.7) return 'перебьётся малым';
+  return 'нужно умеренно';
+}
+function allocSum(){ return state.puzzle.alloc.reduce((a,b)=>a+b,0); }
+function setAlloc(i,d){
+  const p=state.puzzle; let v=p.alloc[i]+d;
+  if(v<0) v=0;
+  if(allocSum()-p.alloc[i]+v > BUDGET) v=BUDGET-(allocSum()-p.alloc[i]);
+  p.alloc[i]=v; renderPuzzle();
+}
+function startPuzzle(){
+  state.puzzle={needs:genNeeds(), alloc:DEPTS.map(()=>0), reveal:DEPTS.map(()=>false)};
+  renderPuzzle(); show('screen-puzzle');
+}
+function renderPuzzle(){
+  const p=state.puzzle, rem=BUDGET-allocSum();
+  const rows=DEPTS.map((d,i)=>`
+    <div class="pz-row">
+      <div class="pz-info"><span class="pz-ic">${d.icon}</span><div><div class="pz-name">${d.name}</div><div class="pz-hint">${deptHint(i)}</div></div></div>
+      <div class="pz-stepper"><button onclick="setAlloc(${i},-${STEP})">−</button><span class="pz-val">${p.alloc[i]}</span><button onclick="setAlloc(${i},${STEP})">+</button></div>
+    </div>`).join('');
+  $('screen-puzzle').innerHTML=`<div class="pz-wrap">
+      <div class="end-kicker">Задача недели</div>
+      <h2>Бюджет недели</h2>
+      <p>Раскидай бюджет по отделам — слушай намёки, у каждого своя потребность. Потратить нужно всё.</p>
+      <div class="pz-budget ${rem===0?'ok':''}">Осталось распределить: ${rem} / ${BUDGET}</div>
+      ${rows}
+      <button class="btn" style="min-width:230px;margin:8px 0 10px;" onclick="puzzleHint()">💡 Подсказка (реклама)</button>
+      <button class="btn btn-primary" style="min-width:230px;" ${rem===0?'':'disabled'} onclick="submitPuzzle()">Утвердить бюджет →</button>
+    </div>`;
+}
+function puzzleHint(){
+  Ads.rewarded(()=>{
+    const p=state.puzzle, hidden=p.reveal.map((r,i)=>r?-1:i).filter(i=>i>=0);
+    if(hidden.length){ p.reveal[hidden[Math.floor(Math.random()*hidden.length)]]=true; renderPuzzle(); }
+  });
+}
+function submitPuzzle(){
+  const p=state.puzzle;
+  if(allocSum()!==BUDGET) return;
+  const dev=p.alloc.reduce((a,v,i)=>a+Math.abs(v-p.needs[i]),0);
+  let tier,fx,msg;
+  if(dev<=20){ tier='Блестяще'; fx={cap:8,mor:5}; msg='Бюджет лёг идеально — отделы довольны, деньги работают.'; state.flags.budgetGreat=true; }
+  else if(dev<=50){ tier='Норма'; fx={cap:3}; msg='Бюджет свёрстан сносно — без провалов, но и без блеска.'; }
+  else { tier='Провал'; fx={cap:-5,mor:-4}; msg='Деньги ушли не туда — отделы недовольны, касса просела.'; state.flags.budgetFail=true; }
+  for(const k in fx) state.m[k]=clamp(state.m[k]+fx[k]);
+  state.flags.puzzleTier=tier; state.flags.puzzleMsg=msg;
+  const icon=tier==='Блестяще'?'🏆':tier==='Норма'?'👍':'⚠️';
+  $('screen-puzzle').innerHTML=`<div class="pz-wrap">
+      <div class="end-kicker">Результат — ${tier}</div>
+      <h2>${icon} Бюджет недели</h2>
+      <p>${msg}</p>
+      <div class="stat-row">${Object.keys(fx).map(k=>`${METRIC_NAMES[k]} ${fx[k]>0?'+':''}${fx[k]}`).join(' · ')}</div>
+      <button class="btn btn-primary" style="min-width:230px;" onclick="endSlice()">Дальше → итоги недели</button>
+    </div>`;
+}
+
 function endSlice(){
   const o=outcome(), st=standings();
   const cons=consequenceLines().map(l=>`<div class="cons">${l}</div>`).join('');
