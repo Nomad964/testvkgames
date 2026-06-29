@@ -123,13 +123,13 @@
   #scene .placeholder .loc{font-family:'Oswald'; letter-spacing:2px; font-size:12px; color:var(--gold-soft); text-transform:uppercase;}
   #scene .placeholder .ph-note{font-size:10.5px; color:#828aa3;}
   #scene img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .6s;}
-  #scene.vmode{padding-bottom:75%;}
-  #scene video{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center top; opacity:0; transition:opacity .5s; z-index:2;}
-  .scene-play{position:absolute; right:10px; bottom:10px; z-index:6; display:none; width:46px; height:46px; border-radius:50%; cursor:pointer;
-    align-items:center; justify-content:center; font-size:19px; color:var(--gold-soft);
-    background:rgba(8,9,14,.6); border:1.5px solid var(--gold); backdrop-filter:blur(5px);
-    box-shadow:0 0 18px rgba(212,162,74,.5); animation:cta 2.4s ease-in-out infinite;}
-  .scene-play.on{display:flex;}
+  #scene.vmode{padding-bottom:177.78%;}
+  #scene video{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:center; opacity:0; transition:opacity .5s; z-index:2;}
+  .scene-ctls{position:absolute; right:10px; bottom:10px; z-index:6; display:none; gap:8px;}
+  .scene-ctls.on{display:flex;}
+  .scene-ctl{width:44px; height:44px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:17px; color:var(--gold-soft);
+    background:rgba(8,9,14,.62); border:1.5px solid var(--gold); backdrop-filter:blur(5px); box-shadow:0 0 16px rgba(212,162,74,.45);}
+  .scene-ctl.hidden{display:none;}
   #scene .tag{position:absolute; left:11px; bottom:11px; z-index:3; font-family:'Oswald'; letter-spacing:1px; font-size:12px; color:var(--gold-soft); padding:5px 11px; border-radius:20px;
     background:rgba(8,9,14,.55); backdrop-filter:blur(6px); border:1px solid rgba(212,162,74,.35);}
 
@@ -201,7 +201,10 @@
       <div class="placeholder"><div class="emoji">🏢</div><div class="loc">Локация</div><div class="ph-note">плейсхолдер — фото по шот-листу</div></div>
       <img id="scene-img" alt="">
       <video id="scene-vid" playsinline muted loop preload="metadata"></video>
-      <button id="scene-play" class="scene-play" aria-label="Смотреть сцену">▶</button>
+      <div id="scene-ctls" class="scene-ctls">
+        <button id="scene-pause" class="scene-ctl" aria-label="Пауза">⏸</button>
+        <button id="scene-sound" class="scene-ctl" aria-label="Звук">🔊</button>
+      </div>
       <div class="tag" id="scene-tag">Котополис</div>
     </div>
     <div id="story">
@@ -332,27 +335,30 @@ function soulVerdict(){const s=state.m.soul;
 
 function renderEvent(){
   const ev=EVENTS[state.cur];
-  const scene=$('scene'), vid=$('scene-vid'), playBtn=$('scene-play'), img=$('scene-img');
+  const scene=$('scene'), vid=$('scene-vid'), img=$('scene-img');
+  const ctls=$('scene-ctls'), pauseBtn=$('scene-pause'), soundBtn=$('scene-sound');
   // --- сброс сцены ---
   try{vid.pause();}catch(e){} vid.removeAttribute('src'); vid.load&&vid.load();
-  vid.style.opacity=0; playBtn.classList.remove('on'); playBtn.onclick=null;
+  vid.style.opacity=0; ctls.classList.remove('on'); pauseBtn.onclick=null; soundBtn.onclick=null;
   scene.classList.remove('vmode'); img.style.opacity=0;
   const ph=document.querySelector('#scene .placeholder');
   ph.querySelector('.emoji').textContent=ev.emoji||'🏢';
   ph.querySelector('.loc').textContent=ev.loc||'';
   $('scene-tag').textContent=ev.tag||'';
-  // постер-фото (первый кадр под видео и для фото-событий)
-  if(ev.img){img.onload=()=>img.style.opacity=1;img.onerror=()=>img.style.opacity=0;img.src=ASSET_DIR+ev.img+'?v=3';}
-  // видео-вставка: играет сразу немым лупом; для диалоговых — кнопка звука
+  // постер-фото только для фото-событий (видео само закрывает кадр)
+  if(ev.img && !ev.video){img.onload=()=>img.style.opacity=1;img.onerror=()=>img.style.opacity=0;img.src=ASSET_DIR+ev.img+'?v=3';}
+  // видео-вставка: полный кадр 9:16, играет сразу немым лупом
   if(ev.video){
     scene.classList.add('vmode');
     vid.loop=true; vid.muted=true; vid.setAttribute('muted','');
     vid.src=CLIP_DIR+ev.video+'?v=3'; vid.style.opacity=1;
     vid.play().catch(()=>{});
-    if(ev.vtype==='tap'){
-      playBtn.textContent='🔊'; playBtn.classList.add('on');
-      playBtn.onclick=()=>{ vid.muted=false; try{vid.currentTime=0;}catch(e){} vid.play().catch(()=>{}); playBtn.classList.remove('on'); };
-    }
+    ctls.classList.add('on');
+    pauseBtn.textContent='⏸';
+    pauseBtn.onclick=()=>{ if(vid.paused){vid.play().catch(()=>{}); pauseBtn.textContent='⏸';} else {vid.pause(); pauseBtn.textContent='▶';} };
+    if(ev.vtype==='tap'){ soundBtn.classList.remove('hidden'); soundBtn.textContent='🔊';
+      soundBtn.onclick=()=>{ vid.muted=!vid.muted; soundBtn.textContent=vid.muted?'🔊':'🔇'; vid.play().catch(()=>{}); };
+    } else { soundBtn.classList.add('hidden'); }
   }
   $('title-ev').textContent=ev.title;
   $('text').innerHTML=(state.cur==='week')?weekText():ev.text;
