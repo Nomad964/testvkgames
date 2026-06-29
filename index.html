@@ -156,10 +156,19 @@
   .saved{font-size:11px; color:var(--emerald); opacity:0; transition:opacity .3s;}
 
   /* ===== END ===== */
-  #screen-end{justify-content:center; align-items:center; text-align:center; padding:34px 26px;}
-  #screen-end h2{font-family:'Playfair Display',serif; font-weight:900; color:var(--gold); font-size:30px; margin-bottom:16px; letter-spacing:.5px;}
-  #screen-end p{font-size:14.5px; line-height:1.6; color:#e7e2d6; margin-bottom:14px; max-width:340px;}
-  .stat-row{font-family:'Oswald'; letter-spacing:1px; color:#cdd2df; font-size:14px; margin-bottom:20px;}
+  #screen-end{justify-content:flex-start; align-items:center; text-align:center; padding:26px 18px 44px; position:relative;}
+  .end-bg{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:.16; z-index:0;}
+  .end-wrap{position:relative; z-index:1; width:100%; max-width:360px;}
+  .end-kicker{font-family:'Oswald'; letter-spacing:3px; font-size:12px; text-transform:uppercase; color:var(--gold-soft); margin-bottom:8px;}
+  #screen-end h2{font-family:'Playfair Display',serif; font-weight:900; color:var(--gold); font-size:29px; margin-bottom:12px; letter-spacing:.5px;}
+  #screen-end p{font-size:14px; line-height:1.6; color:#e7e2d6; margin-bottom:14px;}
+  .cons{text-align:left; font-size:13.5px; line-height:1.5; color:#ece7db; background:rgba(255,255,255,.045); border:1px solid rgba(212,162,74,.18); border-left:3px solid var(--gold); border-radius:10px; padding:9px 12px; margin-bottom:8px;}
+  .stand{text-align:left; font-size:13.5px; line-height:1.55; color:#ece7db; margin:14px 0; padding:11px 13px; border-radius:11px; background:rgba(20,155,126,.08); border:1px solid rgba(20,155,126,.28);}
+  .stand b{color:#fff;}
+  .cant{margin-top:7px; font-style:italic; color:var(--gold-soft);}
+  .end-note{font-size:12.5px; color:#9aa0b3; margin:8px 0 18px;}
+  .end-score{font-family:'Oswald'; letter-spacing:1px; color:var(--gold-soft); font-size:16px; margin:4px 0 14px;}
+  .stat-row{font-family:'Oswald'; letter-spacing:1px; color:#cdd2df; font-size:15px; margin:16px 0 18px;}
 </style>
 </head>
 <body>
@@ -231,6 +240,39 @@ const START = { cap:50, rep:50, mor:60, soul:60 };
 const METRIC_NAMES = { cap:'💰', rep:'⭐', mor:'❤️', soul:'🔮' };
 const ASSET_DIR = './assets/scenes/ch1/';
 const CLIP_DIR  = './assets/clips/';
+
+/* === Реклама === VK Bridge при деплое в VK; вне VK (тест) — reward выдаёт сразу.
+   Принцип: реклама = информация/удобство/косметика/ретрай, НИКОГДА не моральный исход или метрика. */
+const Ads = {
+  _lastInter:0, MIN_GAP:180000,                 // частотный кап интерстишела: 3 мин
+  interstitial(){
+    const now=Date.now();
+    if(now - this._lastInter < this.MIN_GAP) return;
+    this._lastInter = now;
+    try{ if(window.vkBridge) window.vkBridge.send('VKWebAppShowNativeAds',{ad_format:'interstitial'}); }catch(e){}
+  },
+  rewarded(onReward){                            // показываем только по желанию игрока
+    try{
+      if(window.vkBridge){ window.vkBridge.send('VKWebAppShowNativeAds',{ad_format:'reward'}).then(r=>{ if(r&&r.result) onReward(); }).catch(()=>{}); }
+      else { onReward(); }                        // тест вне VK — выдаём награду, чтобы проверять механику
+    }catch(e){ onReward(); }
+  }
+};
+
+/* === Ежедневный стрик === считает дни подряд (награды-UI — следующим шагом) */
+const Streak = {
+  KEY:'devyat9_streak',
+  check(){
+    const today=new Date().toDateString();
+    let s={}; try{ s=JSON.parse(localStorage.getItem(this.KEY))||{}; }catch(e){}
+    if(s.last===today) return s.count||1;
+    const yest=new Date(Date.now()-86400000).toDateString();
+    s.count=(s.last===yest)?((s.count||0)+1):1;
+    s.last=today;
+    try{ localStorage.setItem(this.KEY,JSON.stringify(s)); }catch(e){}
+    return s.count;
+  }
+};
 
 const EVENTS = {
   intro:{ loc:'КАМОРКА · СТАРТОВЫЙ ОФИС', emoji:'🔑', tag:'Барон', img:'ev01_baron_keys.jpg', video:'vid_ev01_baron.mp4', vtype:'tap',
@@ -335,6 +377,8 @@ function soulVerdict(){const s=state.m.soul;
 
 function renderEvent(){
   const ev=EVENTS[state.cur];
+  // мягкий интерстишел на стыке недели — не в первую сессию (заложен хук, в срезе неделя 1 → молчит)
+  if(state.cur==='week' && (state.weekNum||1)>1) Ads.interstitial();
   const scene=$('scene'), vid=$('scene-vid'), img=$('scene-img');
   const ctls=$('scene-ctls'), pauseBtn=$('scene-pause'), soundBtn=$('scene-sound');
   // --- сброс сцены ---
@@ -356,9 +400,8 @@ function renderEvent(){
     ctls.classList.add('on');
     pauseBtn.textContent='⏸';
     pauseBtn.onclick=()=>{ if(vid.paused){vid.play().catch(()=>{}); pauseBtn.textContent='⏸';} else {vid.pause(); pauseBtn.textContent='▶';} };
-    if(ev.vtype==='tap'){ soundBtn.classList.remove('hidden'); soundBtn.textContent='🔊';
-      soundBtn.onclick=()=>{ vid.muted=!vid.muted; soundBtn.textContent=vid.muted?'🔊':'🔇'; vid.play().catch(()=>{}); };
-    } else { soundBtn.classList.add('hidden'); }
+    soundBtn.classList.remove('hidden'); soundBtn.textContent='🔊';
+    soundBtn.onclick=()=>{ vid.muted=!vid.muted; soundBtn.textContent=vid.muted?'🔊':'🔇'; vid.play().catch(()=>{}); };
   }
   $('title-ev').textContent=ev.title;
   $('text').innerHTML=(state.cur==='week')?weekText():ev.text;
@@ -366,19 +409,72 @@ function renderEvent(){
   ev.choices.forEach(ch=>{const b=document.createElement('button');b.className='choice';b.innerHTML=ch.label+(ch.sub?`<small>${ch.sub}</small>`:'');b.onclick=()=>applyChoice(ch);box.appendChild(b);});
 }
 
+function outcome(){
+  const s=state.m.soul, mor=state.m.mor, cap=state.m.cap;
+  if(s>=68 && mor>=58) return {t:'«Тёплый дом»', d:'Ты строишь компанию, где людей ценят как людей. Команда пойдёт за тобой в огонь — но конкуренты уже точат зубы на «мягкого» босса.'};
+  if(s<=38) return {t:'«Бездушная машина»', d:'Цифры блестят, культура мертва, люди стали функциями. Эффективно — пока кто-то не сломается первым.'};
+  if(cap>=62 && mor<=48) return {t:'«Рост на костях»', d:'Деньги пошли, но за счёт людей. Касса довольна, офис — нет, и это бомба замедленного действия.'};
+  return {t:'«Канатоходец»', d:'Ты балансируешь между людьми и прибылью. Пока держишься — но канат натянут до предела.'};
+}
+function consequenceLines(){
+  const f=state.flags, L=[];
+  if(f.felixPlan) L.push('🚀 Ставка на план Феликса разогнала выручку — но команда напряглась, а рынок насторожился.');
+  if(f.grishaHelped) L.push('📦 Ты дал Грише людей: отдел ожил, и команда увидела, что о ней заботятся.');
+  if(f.grishaPushed) L.push('🔥 Ты выжал Гришу досуха — он на грани ухода, и это видят остальные.');
+  if(f.automated) L.push('🤖 Автоматизация срезала косты, но по офису пополз страх: «кто следующий под замену?».');
+  if(f.loan) L.push('💳 Кредит закрыл дыру в кассе — теперь долг тикает где-то на фоне.');
+  if(f.dirtyDeal) L.push('🖤 Грязная сделка Багиры принесла куш — и первую трещину в твоей совести.');
+  if(f.bagiraEnemy) L.push('⚔️ Ты пошёл против Багиры — нажил умного и опасного врага.');
+  if(f.riskyPR) L.push('✨ Вирусная акция Клео взлетела — шуму много, репутация на качелях.');
+  if(f.sonyaMentor) L.push('📋 Ты поверил в Соню — у тебя появился преданный союзник на годы вперёд.');
+  if(!L.length) L.push('Ты прошёл неделю осторожно, не качнув ни одну чашу весов. Иногда это тоже выбор.');
+  return L;
+}
+function standings(){
+  const loyal=[],cold=[];
+  for(const r in state.rel){ if(state.rel[r]>=2) loyal.push(NAME[r]||r); else if(state.rel[r]<=-2) cold.push(NAME[r]||r); }
+  return {loyal,cold};
+}
+function score(){ return Math.round(state.m.cap+state.m.rep+state.m.mor+state.m.soul); }
+function shareWeek(){
+  const o=outcome(), sc=score();
+  const text=`Моя компания «Девять»: ${o.t} · Скор недели ${sc}/400 (💰${Math.round(state.m.cap)} ⭐${Math.round(state.m.rep)} ❤️${Math.round(state.m.mor)} 🔮${Math.round(state.m.soul)}). А каким боссом станешь ты?`;
+  try{
+    if(window.vkBridge){ window.vkBridge.send('VKWebAppShare',{link:location.href}).catch(()=>{}); }
+    else if(navigator.share){ navigator.share({title:'9 Жизней',text,url:location.href}).catch(()=>{}); }
+    else { try{navigator.clipboard.writeText(text);}catch(e){} alert('Результат скопирован:\n\n'+text); }
+  }catch(e){}
+}
 function endSlice(){
-  const ec=$('screen-end');
-  ec.innerHTML=`<h2>Конец среза · Глава 1</h2>
-    <p>${soulVerdict()}</p>
-    <div class="stat-row">💰 ${Math.round(state.m.cap)} · ⭐ ${Math.round(state.m.rep)} · ❤️ ${Math.round(state.m.mor)} · 🔮 ${Math.round(state.m.soul)}</div>
-    <p style="font-size:13.5px;color:#cfcabd;">Это срез на 8 событий. Проверь ощущение: качаются ли метрики, чувствуется ли вес выборов, тянет ли «а что если иначе». Дальше масштабируем главу и одеваем в фото.</p>
-    <button class="btn btn-primary" style="min-width:240px;" onclick="hardReset()">↺ Пройти заново другим путём</button>`;
+  const o=outcome(), st=standings();
+  const cons=consequenceLines().map(l=>`<div class="cons">${l}</div>`).join('');
+  let stand='';
+  if(st.loyal.length||st.cold.length){
+    stand=`<div class="stand"><b>Команда о тебе:</b><br>`+
+      (st.loyal.length?`💚 За тебя — ${st.loyal.join(', ')}. `:'')+
+      (st.cold.length?`🔻 Затаили обиду — ${st.cold.join(', ')}.`:'')+
+      `<div class="cant">Для всех хорошим не будешь — и это нормально.</div></div>`;
+  }
+  $('screen-end').innerHTML=`
+    <video class="end-bg" playsinline muted loop autoplay src="${CLIP_DIR}vid_ev08_night.mp4?v=3"></video>
+    <div class="end-wrap">
+      <div class="end-kicker">Итоги первой недели · что ты построил</div>
+      <h2>${o.t}</h2>
+      <p>${o.d}</p>
+      ${cons}
+      ${stand}
+      <div class="stat-row">💰 ${Math.round(state.m.cap)} · ⭐ ${Math.round(state.m.rep)} · ❤️ ${Math.round(state.m.mor)} · 🔮 ${Math.round(state.m.soul)}</div>
+      <div class="end-score">Скор недели: <b>${score()}</b> / 400</div>
+      <p class="end-note">Это срез. В полной игре каждое решение тянет цепочку на недели вперёд и ведёт к одной из 5–6 разных концовок.</p>
+      <button class="btn" style="min-width:240px;margin-bottom:10px;" onclick="shareWeek()">↗ Поделиться итогом</button>
+      <button class="btn btn-primary" style="min-width:240px;" onclick="hardReset()">↺ Прожить неделю иначе</button>
+    </div>`;
   localStorage.removeItem(SAVE_KEY);
   show('screen-end');
 }
 
 function flashSaved(){const s=$('saved');s.style.opacity=1;setTimeout(()=>s.style.opacity=0,800);}
-function startGame(){state=fresh();renderMetrics();renderEvent();show('screen-game');save();}
+function startGame(){state=fresh();try{state.streak=Streak.check();}catch(e){}renderMetrics();renderEvent();show('screen-game');save();}
 function hardReset(){startGame();}
 
 /* INTRO sequence */
