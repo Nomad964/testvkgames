@@ -156,7 +156,7 @@
   .saved{font-size:11px; color:var(--emerald); opacity:0; transition:opacity .3s;}
 
   /* ===== END ===== */
-  #screen-end{justify-content:flex-start; align-items:center; text-align:center; padding:26px 18px 44px; position:relative;}
+  #screen-end{justify-content:flex-start; align-items:center; text-align:center; padding:26px 18px 72px; position:relative;}
   .end-bg{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; opacity:.16; z-index:0;}
   .end-wrap{position:relative; z-index:1; width:100%; max-width:360px;}
   .end-kicker{font-family:'Oswald'; letter-spacing:3px; font-size:12px; text-transform:uppercase; color:var(--gold-soft); margin-bottom:8px;}
@@ -176,6 +176,8 @@
   #screen-puzzle p{font-size:14px; line-height:1.55; color:#e7e2d6; margin-bottom:12px;}
   .pz-budget{font-family:'Oswald'; letter-spacing:1px; color:#e8688a; font-size:16px; margin:6px 0 14px;}
   .pz-budget.ok{color:var(--emerald);}
+  .pz-timer{font-family:'Oswald'; font-size:24px; letter-spacing:1px; color:var(--gold-soft); margin-bottom:4px;}
+  .pz-timer.low{color:#e8688a;}
   .pz-row{display:flex; justify-content:space-between; align-items:center; gap:10px; background:rgba(255,255,255,.04); border:1px solid rgba(212,162,74,.18); border-radius:12px; padding:10px 12px; margin-bottom:9px;}
   .pz-info{display:flex; align-items:center; gap:10px; text-align:left;}
   .pz-ic{font-size:23px;}
@@ -186,6 +188,7 @@
   .pz-val{font-family:'Oswald'; font-size:17px; min-width:30px; color:#fff;}
   .btn[disabled]{opacity:.4; pointer-events:none;}
 </style>
+<script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
 </head>
 <body>
 <div id="app">
@@ -293,6 +296,19 @@ const Streak = {
   }
 };
 
+/* === Звуки === лёгкие WebAudio-тоны, без файлов. Включаются на жестах игрока. */
+const SFX={
+  ctx:null, on:true,
+  _c(){ if(!this.ctx){ try{ this.ctx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(this.ctx&&this.ctx.state==='suspended'){ this.ctx.resume(); } return this.ctx; },
+  tone(f,d,type,vol,delay){ if(!this.on)return; const c=this._c(); if(!c)return; const t=c.currentTime+(delay||0); const o=c.createOscillator(),g=c.createGain(); o.type=type||'sine'; o.frequency.value=f; g.gain.setValueAtTime(vol||0.05,t); o.connect(g); g.connect(c.destination); o.start(t); g.gain.exponentialRampToValueAtTime(0.0001,t+d); o.stop(t+d); },
+  click(){ this.tone(430,0.07,'triangle',0.045); },
+  step(){ this.tone(640,0.05,'square',0.03); },
+  confirm(){ this.tone(560,0.1,'sine',0.05); this.tone(760,0.12,'sine',0.05,0.07); },
+  good(){ this.tone(620,0.12,'sine',0.06); this.tone(820,0.13,'sine',0.06,0.09); this.tone(1040,0.16,'sine',0.05,0.19); },
+  bad(){ this.tone(300,0.18,'sawtooth',0.045); this.tone(200,0.22,'sawtooth',0.045,0.11); },
+  tick(){ this.tone(900,0.04,'square',0.035); }
+};
+
 const EVENTS = {
   intro:{ loc:'КАМОРКА · СТАРТОВЫЙ ОФИС', emoji:'🔑', tag:'Барон', img:'ev01_baron_keys.jpg', video:'vid_ev01_baron.mp4', vtype:'tap',
     title:'Ключи от «Девяти»',
@@ -376,6 +392,7 @@ const NAME={baron:'Барон',sonya:'Соня',felix:'Феликс',grisha:'Г�
 function showFloats(fx,rel){const box=$('floats');box.innerHTML='';const items=[];if(fx)for(const k in fx)items.push(`${METRIC_NAMES[k]} ${fx[k]>0?'+':''}${fx[k]}`);if(rel)for(const r in rel)items.push(`${NAME[r]||r} ${rel[r]>0?'+':''}${rel[r]}`);items.forEach((t,i)=>{const el=document.createElement('div');el.className='float';el.textContent=t;el.style.animationDelay=(i*0.12)+'s';box.appendChild(el);});}
 
 function applyChoice(ch){
+  SFX.click();
   if(ch.fx)for(const k in ch.fx)state.m[k]=clamp(state.m[k]+ch.fx[k]);
   if(ch.rel)for(const r in ch.rel)state.rel[r]=(state.rel[r]||0)+ch.rel[r];
   if(ch.set)for(const f in ch.set)state.flags[f]=ch.set[f];
@@ -471,6 +488,7 @@ function shareWeek(){
   }catch(e){}
 }
 /* ===== Головоломка недели №1: «Распредели бюджет» ===== */
+let pzTimer=null;
 const DEPTS=[
   {key:'log', name:'Логистика', icon:'📦'},
   {key:'mkt', name:'Маркетинг', icon:'✨'},
@@ -498,11 +516,22 @@ function setAlloc(i,d){
   const p=state.puzzle; let v=p.alloc[i]+d;
   if(v<0) v=0;
   if(allocSum()-p.alloc[i]+v > BUDGET) v=BUDGET-(allocSum()-p.alloc[i]);
-  p.alloc[i]=v; renderPuzzle();
+  p.alloc[i]=v; SFX.step(); renderPuzzle();
 }
 function startPuzzle(){
-  state.puzzle={needs:genNeeds(), alloc:DEPTS.map(()=>0), reveal:DEPTS.map(()=>false)};
-  renderPuzzle(); show('screen-puzzle');
+  state.puzzle={needs:genNeeds(), alloc:DEPTS.map(()=>0), reveal:DEPTS.map(()=>false), timeLeft:30};
+  renderPuzzle(); show('screen-puzzle'); startPuzzleTimer();
+}
+function startPuzzleTimer(){
+  clearInterval(pzTimer);
+  pzTimer=setInterval(()=>{
+    if(!state.puzzle){ clearInterval(pzTimer); return; }
+    state.puzzle.timeLeft--;
+    const el=$('pz-timer');
+    if(el){ el.textContent=state.puzzle.timeLeft+' с'; if(state.puzzle.timeLeft<=5) el.classList.add('low'); }
+    if(state.puzzle.timeLeft<=5 && state.puzzle.timeLeft>0) SFX.tick();
+    if(state.puzzle.timeLeft<=0){ clearInterval(pzTimer); submitPuzzle(true); }
+  },1000);
 }
 function renderPuzzle(){
   const p=state.puzzle, rem=BUDGET-allocSum();
@@ -513,8 +542,9 @@ function renderPuzzle(){
     </div>`).join('');
   $('screen-puzzle').innerHTML=`<div class="pz-wrap">
       <div class="end-kicker">Задача недели</div>
+      <div class="pz-timer ${state.puzzle.timeLeft<=5?'low':''}" id="pz-timer">${state.puzzle.timeLeft} с</div>
       <h2>Бюджет недели</h2>
-      <p>Раскидай бюджет по отделам — слушай намёки, у каждого своя потребность. Потратить нужно всё.</p>
+      <p>Раскидай бюджет по отделам — слушай намёки. Успей за 30 секунд: <b>нераспределённое сгорает</b>.</p>
       <div class="pz-budget ${rem===0?'ok':''}">Осталось распределить: ${rem} / ${BUDGET}</div>
       ${rows}
       <button class="btn" style="min-width:230px;margin:8px 0 10px;" onclick="puzzleHint()">💡 Подсказка (реклама)</button>
@@ -527,14 +557,16 @@ function puzzleHint(){
     if(hidden.length){ p.reveal[hidden[Math.floor(Math.random()*hidden.length)]]=true; renderPuzzle(); }
   });
 }
-function submitPuzzle(){
+function submitPuzzle(force){
+  clearInterval(pzTimer);
   const p=state.puzzle;
-  if(allocSum()!==BUDGET) return;
-  const dev=p.alloc.reduce((a,v,i)=>a+Math.abs(v-p.needs[i]),0);
+  if(!force && allocSum()!==BUDGET) return;
+  const dev=p.alloc.reduce((a,v,i)=>a+Math.abs(v-p.needs[i]),0) + (BUDGET-allocSum());
   let tier,fx,msg;
   if(dev<=20){ tier='Блестяще'; fx={cap:8,mor:5}; msg='Бюджет лёг идеально — отделы довольны, деньги работают.'; state.flags.budgetGreat=true; }
   else if(dev<=50){ tier='Норма'; fx={cap:3}; msg='Бюджет свёрстан сносно — без провалов, но и без блеска.'; }
-  else { tier='Провал'; fx={cap:-5,mor:-4}; msg='Деньги ушли не туда — отделы недовольны, касса просела.'; state.flags.budgetFail=true; }
+  else { tier='Провал'; fx={cap:-5,mor:-4}; msg='Деньги ушли не туда (или сгорели) — отделы недовольны, касса просела.'; state.flags.budgetFail=true; }
+  if(tier==='Провал') SFX.bad(); else SFX.good();
   for(const k in fx) state.m[k]=clamp(state.m[k]+fx[k]);
   state.flags.puzzleTier=tier; state.flags.puzzleMsg=msg;
   const icon=tier==='Блестяще'?'🏆':tier==='Норма'?'👍':'⚠️';
@@ -598,6 +630,9 @@ $('btn-continue').onclick=()=>{state=load()||fresh();renderMetrics();renderEvent
 
 /* continue button if save exists */
 if(load()){$('btn-continue').style.display='block';}
+
+/* VK Bridge init — внутри ВК активирует мост и рекламу; вне ВК тихо игнорится */
+try{ if(window.vkBridge) window.vkBridge.send('VKWebAppInit'); }catch(e){}
 </script>
 </body>
 </html>
