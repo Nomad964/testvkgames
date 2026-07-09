@@ -1222,13 +1222,14 @@ body:not(.panorama) #mScene{display:block}
 
 <!-- кото-карточки «Тогда было лучше» -->
 <style>
-#cardsGrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px;margin-top:12px;max-height:54vh;overflow:auto;padding:2px}
-.cardCell{position:relative;border-radius:12px;overflow:hidden;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);aspect-ratio:9/16;cursor:pointer}
-.cardCell img{width:100%;height:100%;object-fit:cover;display:block}
-.cardCell .cap{position:absolute;left:0;right:0;bottom:0;padding:6px 6px;font-size:9.5px;font-weight:800;line-height:1.15;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.85));text-align:left}
-.cardCell.lock{cursor:default}
-.cardCell.lock .ph{position:absolute;inset:0;display:grid;place-items:center;font-size:28px;color:rgba(255,255,255,.20)}
-.cardCell.lock .num{position:absolute;top:5px;left:7px;font-size:11px;font-weight:800;color:rgba(255,255,255,.32)}
+#cardsGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:12px;max-height:52vh;overflow-y:auto;overflow-x:hidden;padding:2px;align-content:start}
+/* высоту плитки держим padding-bottom'ом (aspect-ratio в ВК-вебвью не всегда срабатывает в grid → плитки ломались) */
+.cardCell{position:relative;width:100%;height:0;padding-bottom:150%;border-radius:12px;overflow:hidden;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);cursor:pointer}
+.cardCell img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.cardCell .cap{position:absolute;left:0;right:0;bottom:0;padding:16px 6px 6px;font-size:9.5px;font-weight:800;line-height:1.15;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.9));text-align:left}
+.cardCell.lock{cursor:default;background:rgba(255,255,255,.04)}
+.cardCell.lock .ph{position:absolute;inset:0;display:grid;place-items:center;font-size:26px;color:rgba(255,255,255,.16)}
+.cardCell.lock .num{position:absolute;top:6px;left:0;right:0;text-align:center;font-size:12px;font-weight:800;color:rgba(255,255,255,.34)}
 #cardsBtn.alert{border-color:rgba(255,211,77,.55)}
 #cardBigWrap{max-width:400px}
 #cardBigImg{width:100%;border-radius:18px;display:block;border:1px solid rgba(255,255,255,.12)}
@@ -1241,6 +1242,7 @@ body:not(.panorama) #mScene{display:block}
     <h2>📇 Кото-карточки</h2>
     <div class="sub" id="cardsSub">«Тогда было лучше» — собери коллекцию советского быта.</div>
     <button class="rowBtn adB" id="cardsAdBtn" style="margin-top:10px">🎬 Открыть карточку за рекламу</button>
+    <input id="cardsSearch" type="text" inputmode="numeric" placeholder="🔍 Найти карточку по номеру (1–100)" autocomplete="off" style="width:100%;box-sizing:border-box;margin-top:10px;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.06);color:#fff;font:600 14px inherit;outline:none">
     <div id="cardsGrid"></div>
   </div>
 </div>
@@ -2038,7 +2040,8 @@ $('hireBtn').addEventListener('click', function(){
 
 /* ============ ЗДАНИЯ ============ */
 // открытие локаций: следующая — по Министру (ур.8) предыдущей; последние 3 — по Министрам на ВСЕХ предыдущих.
-var PREVIEW_ALL = false; try { PREVIEW_ALL = /[?&]seeall/.test(location.search||''); } catch(e){} // тест-просмотр всех локаций (?seeall), сейв не трогает
+// тест-просмотр всех локаций: ?seeall ИЛИ #seeall (в ВК query-параметры иногда режутся, hash доезжает надёжнее). Сейв НЕ трогает.
+var PREVIEW_ALL = false; try { PREVIEW_ALL = /seeall/i.test((location.search||'')+' '+(location.hash||'')); } catch(e){}
 /* лучшее одновременное число Министров (ур.8) на здании i (с обратной совместимостью со старым ministerDone) */
 function minTier(i){ return Math.max((S.bestMin&&S.bestMin[i])||0, S.ministerDone[i]?1:0); }
 /* требование для зданий 6/7/8: {need: сколько Министров на каждом, range: первые N служб} */
@@ -2077,7 +2080,7 @@ function renderBldNav(){
   nav.innerHTML = html;
   var btns = nav.querySelectorAll('.navB');
   for (var i=0;i<btns.length;i++){ (function(el){ el.addEventListener('click', function(){ switchBld(el.getAttribute('data-b')|0); }); })(btns[i]); }
-  var hp=$('heroProg'); if(hp){ var hc=0; for(var z=0;z<8;z++) if(S.legOpen[z]) hc++; hp.textContent=hc+'/8'; }
+  var hp=$('heroProg'); if(hp){ var hc=0; for(var z=0;z<BLD_N;z++) if(S.legOpen[z]) hc++; hp.textContent=hc+'/'+BLD_N; }
 }
 function switchBld(b){
   if (!bldUnlocked(b)) { toast(bldLockMsg(b)); return; }
@@ -2657,9 +2660,9 @@ function colSection(g, title, arr, mx, bld){
 function legendSection(g){
   var H = document.createElement('div');
   H.style.cssText = 'grid-column:1/-1;font-size:11px;font-weight:800;letter-spacing:2px;color:var(--gold);margin-top:8px';
-  H.textContent = '👑 ЛЕГЕНДАРНЫЕ КОТЫ · ' + LEGCNT() + '/8';
+  H.textContent = '👑 ЛЕГЕНДАРНЫЕ КОТЫ · ' + LEGCNT() + '/' + BLD_N;
   g.appendChild(H);
-  for (var b=0;b<8;b++){
+  for (var b=0;b<BLD_N;b++){
     var cat = LEGCAT(b), got = !!S.legOpen[b], canWork = !got && bldUnlocked(b); if (got) colOpen++;
     var need = LEG_NEED[b], prog = Math.min(S.legAds[b]|0, need);
     var d = document.createElement('div');
@@ -2683,11 +2686,11 @@ function legendSection(g){
   var lbs = g.querySelectorAll('[data-leg]');
   for (var i=0;i<lbs.length;i++){ (function(el){ el.addEventListener('click', function(e){ if(e&&e.stopPropagation)e.stopPropagation(); watchLegAd(el.getAttribute('data-leg')|0); }); })(lbs[i]); }
 }
-function LEGCNT(){ var c=0; for (var i=0;i<8;i++) if (S.legOpen[i]) c++; return c; }
+function LEGCNT(){ var c=0; for (var i=0;i<BLD_N;i++) if (S.legOpen[i]) c++; return c; }
 function renderCollection(){
   var g = $('colGrid'); g.innerHTML = '';
   colOpen = 0;
-  var total = BLD_N * MAXLVL + HEROES.length + TALIS.length;
+  var total = BLD_N * MAXLVL + BLD_N; // обычные коты + по 1 легендарному на каждую из 20 служб
   for (var cb=0; cb<BLD_N; cb++){
     var bopen = bldUnlocked(cb);                            // показываем ВСЕ 8 зданий; закрытые — тизером (тёмные карточки «?»)
     colSection(g, (bopen ? BLD_ICON[cb] : '🔒') + ' ' + BLD_NAMES[cb].toUpperCase(), catsOf(cb), bopen ? maxOf(cb) : 0, cb);
@@ -2876,7 +2879,7 @@ function showInterstitial(){
 function renderLegends(){
   var box = $('heroList'); if (!box) return;
   var html = '';
-  for (var b=0;b<8;b++){
+  for (var b=0;b<BLD_N;b++){
     var cat = LEGCAT(b), open = !!S.legOpen[b], unlocked = bldUnlocked(b);
     var need = LEG_NEED[b], got = Math.min(S.legAds[b]|0, need);
     html += '<div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--stroke)">'
@@ -2974,12 +2977,15 @@ function openCardBig(n){
   curCardShare = { img: CARD_IMG(n), title: CARD_TITLES[n-1], cap: CARD_CAPS[n-1] };
   $('cardBig').classList.add('show');
 }
+var cardSearchQ='';
 function renderCards(){
   var g=$('cardsGrid'); if(!g) return; g.innerHTML='';
   $('cardsSub').textContent = 'Собрано '+cardsCount()+' из '+CARD_N+'. «Тогда было лучше» — тёплая ирония о советском быте. Открываются за министров, дневной бонус, легендарных котов и реорганизации.';
   var ab=$('cardsAdBtn'); if(ab) ab.style.display = (nextCardNum()<0)?'none':'flex';
+  var q=(cardSearchQ||'').replace(/\D/g,'');
   var seen = (S.cardsSeen||[]).slice().reverse();  // новое — первым
   var locked=[], i; for(i=0;i<CARD_ORDER.length;i++){ var n=CARD_ORDER[i]; if((S.cardsSeen||[]).indexOf(n)<0) locked.push(n); }
+  if(q){ var f=function(n){ return (''+n).indexOf(q)===0; }; seen=seen.filter(f); locked=locked.filter(f); }  // поиск по номеру (префикс)
   seen.forEach(function(n){
     var d=document.createElement('div'); d.className='cardCell';
     if(cardRarity(n)==='leg') d.style.borderColor='rgba(255,211,77,.6)';
@@ -2992,6 +2998,7 @@ function renderCards(){
     d.innerHTML='<div class="ph">📇</div><div class="num">'+n+'</div>';
     g.appendChild(d);
   });
+  if(q && !seen.length && !locked.length){ g.innerHTML='<div style="grid-column:1/-1;opacity:.7;font-size:13px;padding:14px 4px;text-align:center">Карточка №'+q+' не найдена</div>'; }
 }
 function _buildCardStory(cb){
   if(!curCardShare){ cb(null); return; }
@@ -3036,7 +3043,8 @@ function shareCard(){
   });
 }
 (function wireCards(){
-  var b=$('cardsBtn'); if(b) b.addEventListener('click', function(){ S.newCard=false; updateCardsProg(); renderCards(); try{$('shopOv').classList.remove('show');}catch(e){} $('cardsOv').classList.add('show'); doSave(); });
+  var b=$('cardsBtn'); if(b) b.addEventListener('click', function(){ S.newCard=false; cardSearchQ=''; try{var _cs=$('cardsSearch'); if(_cs)_cs.value='';}catch(e){} updateCardsProg(); renderCards(); try{$('shopOv').classList.remove('show');}catch(e){} $('cardsOv').classList.add('show'); doSave(); });
+  var se=$('cardsSearch'); if(se) se.addEventListener('input', function(){ cardSearchQ=se.value||''; renderCards(); });
   var sh=$('cardShareBtn'); if(sh) sh.addEventListener('click', shareCard);
   var ab=$('cardsAdBtn'); if(ab) ab.addEventListener('click', function(){ if(nextCardNum()<0){ toast('Все карточки уже собраны 🎉'); return; } showRewarded(function(ok){ if(ok) dropCard('ad'); }); });
   var cb=$('cardBig'); if(cb) cb.addEventListener('click', function(e){ if(e.target===this) this.classList.remove('show'); });
