@@ -299,7 +299,8 @@ button{font-family:inherit;border:none;cursor:pointer}
 
 /* боковые сцены: фикс-панели точно в свободном пространстве слева/справа от игровой колонки (max-width 480px, центр).
    Никакого fullscreen-кропа — контент всегда в видимой боковой полосе. На мобиле полос нет → скрыты. */
-#sceneL,#sceneR{position:fixed;top:0;bottom:0;z-index:-1;overflow:hidden;pointer-events:none}
+#sceneL,#sceneR{position:fixed;top:0;bottom:0;z-index:-1;overflow:hidden;pointer-events:none;display:none}
+body.panorama #sceneL,body.panorama #sceneR{display:block}
 #sceneL{left:0;width:calc(50vw - 244px)}
 #sceneR{right:0;width:calc(50vw - 244px)}
 #sceneL svg,#sceneR svg{width:100%;height:100%;display:block;filter:brightness(1.4) saturate(1.1)}
