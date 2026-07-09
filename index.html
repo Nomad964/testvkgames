@@ -43,9 +43,14 @@ body.panorama #app{ background:rgba(9,12,19,.5); -webkit-backdrop-filter:blur(7p
 
 /* header */
 header{display:flex;align-items:center;justify-content:space-between;gap:10px}
-/* iPhone в ВК, «Элементы управления → Поверх окна»: крестик закрытия ВК висит в правом верхнем углу над игрой.
-   На узких экранах чуть отодвигаем шапку от правого угла, чтобы кошелёк-счётчик не попадал под этот крестик. */
-@media (max-width:759px){ header{ padding-right:52px } }
+/* iPhone в ВК, «Элементы управления → Поверх окна»: панель ВК (✕ ⋯) висит ПОВЕРХ верха игры и перекрывала счёт/титул.
+   Опускаем ВЕСЬ интерфейс ниже плавающих кнопок ВК = чёлка + буфер ~54px. Только в приложении ВК (body.invk) и на мобиле;
+   десктоп/панораму и низ не трогаем. Плюс небольшой отступ шапки справа, чтобы счётчик не лип к правому краю. */
+@media (max-width:759px){
+  body.invk{ padding-top: calc(env(safe-area-inset-top) + 54px); }
+  body.invk #toasts{ top: calc(10px + env(safe-area-inset-top) + 54px); }
+  header{ padding-right:8px }
+}
 .brand{min-width:0;flex:1 1 auto;overflow:hidden}
 .brand h1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .wallet{flex:0 0 auto;min-width:0}
@@ -1574,6 +1579,8 @@ function hirePrice(){
 var vk = window.vkBridge || null;
 var inVK = false;
 try { inVK = !!vk && /[?&]vk_/.test(location.search); } catch(e){}
+// В приложении ВК опускаем верхний интерфейс ниже плавающих кнопок ВК «Поверх окна» (см. body.invk в CSS).
+try { if (inVK) { if (document.body) document.body.classList.add('invk'); else document.addEventListener('DOMContentLoaded', function(){ try{ document.body.classList.add('invk'); }catch(e){} }); } } catch(e){}
 var IS_OK = false;
 try {
   var _okre = /ok\.ru|odnoklassniki|apiok/i;
