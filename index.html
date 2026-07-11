@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Мяу-Корпорация — Доставка</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@600;800;900&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --safe-top:env(safe-area-inset-top,0px); --safe-bot:env(safe-area-inset-bottom,0px);
+    --glass:rgba(18,20,30,.52); --glass-2:rgba(16,18,26,.72);
+    --stroke:1px solid rgba(255,255,255,.12);
+    --hl:inset 0 1px 0 rgba(255,255,255,.16);
+    --shadow:0 10px 26px rgba(0,0,0,.38);
+    --accent:linear-gradient(135deg,#5EEAD4,#7C7CF0);
+    --ink:#f4f6fb; --ink-dim:rgba(244,246,251,.62);
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; margin:0; }
+  html,body{ height:100%; overflow:hidden; background:#0b0d12; color:var(--ink);
+    font-family:Manrope,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; user-select:none; -webkit-user-select:none; touch-action:manipulation; }
+  body{ display:flex; align-items:center; justify-content:center; }
+  #backdrop{ position:fixed; inset:0; z-index:0; overflow:hidden; background:#0b0d12; }
+  #backdrop img{ position:absolute; inset:-8%; width:116%; height:116%; object-fit:cover; filter:blur(30px) brightness(.4) saturate(1.1); }
+  /* портретная колонка */
+  #stage{ position:relative; z-index:1; overflow:hidden; height:100vh; height:100dvh; width:100vw; width:min(100vw, 56.25dvh);
+    box-shadow:0 0 60px rgba(0,0,0,.6); }
+  #scene{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; z-index:0; }
+  /* скримы для читаемости стекла поверх фото */
+  #stage:before{ content:''; position:absolute; left:0; right:0; top:0; height:34%; z-index:1; pointer-events:none;
+    background:linear-gradient(to bottom, rgba(8,9,14,.78), rgba(8,9,14,0)); }
+  #stage:after{ content:''; position:absolute; left:0; right:0; bottom:0; height:52%; z-index:1; pointer-events:none;
+    background:linear-gradient(to top, rgba(8,9,14,.92), rgba(8,9,14,0)); }
+
+  .glass{ background:var(--glass); border:var(--stroke); box-shadow:var(--shadow), var(--hl); border-radius:20px; }
+
+  /* HUD */
+  .hud{ position:absolute; z-index:5; top:calc(12px + var(--safe-top)); left:12px; right:12px; display:flex; gap:8px; align-items:center; }
+  .pill{ background:var(--glass); border:var(--stroke); box-shadow:var(--hl); border-radius:999px; padding:9px 14px; display:flex; align-items:center; gap:7px; font-weight:800; }
+  .pill .lbl{ font-size:11px; font-weight:700; color:var(--ink-dim); }
+  #coins{ font-size:18px; font-family:Unbounded; letter-spacing:.3px; }
+  #rate{ font-size:15px; }
+  .hud .sp{ flex:1; }
+  .icobtn{ width:42px; height:42px; border-radius:14px; background:var(--glass); border:var(--stroke); box-shadow:var(--hl);
+    display:flex; align-items:center; justify-content:center; font-size:19px; cursor:pointer; }
+
+  /* бизнес-табы */
+  .biz{ position:absolute; z-index:5; top:calc(64px + var(--safe-top)); left:12px; right:12px; display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; }
+  .biz::-webkit-scrollbar{ display:none; }
+  .bizchip{ flex:0 0 auto; padding:8px 14px; border-radius:14px; background:var(--glass); border:var(--stroke); box-shadow:var(--hl);
+    font-weight:800; font-size:13px; display:flex; align-items:center; gap:6px; color:var(--ink-dim); }
+  .bizchip.on{ color:#0b0d12; background:var(--accent); border-color:transparent; box-shadow:0 6px 16px rgba(110,120,240,.4); }
+  .bizchip .lock{ opacity:.7; font-size:12px; }
+
+  /* заголовок бизнеса */
+  .bizTitle{ position:absolute; z-index:4; left:0; right:0; top:calc(112px + var(--safe-top)); text-align:center; pointer-events:none; }
+  .bizTitle h1{ font-family:Unbounded; font-weight:900; font-size:22px; letter-spacing:.4px; }
+  .bizTitle p{ font-size:12px; color:var(--ink-dim); font-weight:700; margin-top:2px; }
+
+  /* мерж-поле */
+  #boardWrap{ position:absolute; z-index:4; left:12px; right:12px; bottom:calc(150px + var(--safe-bot)); }
+  #board{ display:grid; grid-template-columns:repeat(4,1fr); gap:9px; padding:12px; }
+  .cell{ position:relative; aspect-ratio:1; border-radius:16px; background:rgba(255,255,255,.05);
+    border:1px dashed rgba(255,255,255,.14); overflow:hidden; }
+  .cell.filled{ border:1px solid rgba(255,255,255,.16); background:#0b0d12; cursor:pointer; box-shadow:var(--hl); }
+  .cell img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .cell .rk{ position:absolute; left:5px; bottom:5px; background:rgba(8,9,14,.7); border:var(--stroke);
+    border-radius:8px; font-size:10px; font-weight:900; padding:1px 6px; backdrop-filter:none; }
+  .cell.sel{ outline:2px solid #7CF; outline-offset:-2px; transform:scale(.96); transition:transform .1s; }
+  .cell.pop{ animation:pop .28s cubic-bezier(.2,1.4,.4,1); }
+  @keyframes pop{ 0%{ transform:scale(.6); } 100%{ transform:scale(1);} }
+
+  /* нижний док */
+  .dock{ position:absolute; z-index:6; left:12px; right:12px; bottom:calc(14px + var(--safe-bot)); display:flex; gap:10px; align-items:stretch; }
+  #hireBtn{ flex:1; border:none; border-radius:20px; padding:15px; font-family:Unbounded; font-weight:800; font-size:16px; color:#08120f;
+    background:var(--accent); box-shadow:0 8px 22px rgba(94,234,212,.32), var(--hl); cursor:pointer; transition:transform .08s; display:flex; flex-direction:column; align-items:center; gap:1px; }
+  #hireBtn:active{ transform:translateY(2px) scale(.99); }
+  #hireBtn small{ font-family:Manrope; font-weight:700; font-size:12px; opacity:.8; }
+  #hireBtn:disabled{ filter:grayscale(.5) brightness(.85); }
+  .dbtn{ width:60px; border-radius:20px; background:var(--glass); border:var(--stroke); box-shadow:var(--hl);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; font-size:20px; cursor:pointer; position:relative; }
+  .dbtn small{ font-size:9px; font-weight:800; color:var(--ink-dim); }
+  .badge{ position:absolute; top:-5px; right:-5px; background:var(--accent); color:#08120f; font-size:10px; font-weight:900; border-radius:9px; padding:1px 6px; }
+
+  /* мем-карта реавил (временный оверлей — тут МОЖНО настоящий blur) */
+  #reveal{ position:absolute; inset:0; z-index:9; display:none; align-items:center; justify-content:center;
+    background:rgba(8,9,14,.55); backdrop-filter:blur(14px) saturate(1.2); -webkit-backdrop-filter:blur(14px) saturate(1.2); }
+  #reveal.show{ display:flex; animation:fade .25s; }
+  @keyframes fade{ from{opacity:0} to{opacity:1} }
+  .mcard{ width:82%; max-width:330px; border-radius:26px; overflow:hidden; background:var(--glass-2); border:var(--stroke);
+    box-shadow:0 24px 60px rgba(0,0,0,.6), var(--hl); transform:translateY(10px) scale(.96); animation:rise .34s cubic-bezier(.2,1.3,.4,1) forwards; }
+  @keyframes rise{ to{ transform:translateY(0) scale(1);} }
+  .mcard .ph{ position:relative; aspect-ratio:4/5; }
+  .mcard .ph img{ width:100%; height:100%; object-fit:cover; }
+  .mcard .ph:after{ content:''; position:absolute; inset:0; background:linear-gradient(to top, rgba(8,9,14,.9), rgba(8,9,14,0) 45%); }
+  .mcard .cap{ position:absolute; left:16px; right:16px; bottom:14px; }
+  .mcard .new{ display:inline-block; background:var(--accent); color:#08120f; font-weight:900; font-size:11px; padding:3px 10px; border-radius:9px; letter-spacing:.5px; }
+  .mcard .pl{ font-family:Unbounded; font-weight:800; font-size:19px; line-height:1.15; margin-top:8px; text-shadow:0 2px 8px rgba(0,0,0,.6); }
+  .mcard .foot{ padding:12px; display:flex; gap:10px; }
+  .mcard .foot button{ flex:1; border:none; border-radius:15px; padding:12px; font-weight:800; font-size:14px; cursor:pointer; font-family:Manrope; }
+  .share{ background:var(--accent); color:#08120f; }
+  .close{ background:rgba(255,255,255,.08); color:var(--ink); border:var(--stroke)!important; }
+
+  /* коллекция (модалка) */
+  .modal{ position:absolute; inset:0; z-index:8; display:none; flex-direction:column;
+    background:rgba(8,9,14,.6); backdrop-filter:blur(16px) saturate(1.2); -webkit-backdrop-filter:blur(16px) saturate(1.2); }
+  .modal.show{ display:flex; animation:fade .2s; }
+  .mHead{ display:flex; align-items:center; gap:10px; padding:calc(14px + var(--safe-top)) 16px 10px; }
+  .mHead h2{ font-family:Unbounded; font-weight:800; font-size:19px; }
+  .mHead .x{ margin-left:auto; width:38px; height:38px; border-radius:12px; background:var(--glass); border:var(--stroke); box-shadow:var(--hl); display:flex; align-items:center; justify-content:center; font-size:18px; cursor:pointer; }
+  .mBody{ flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding:6px 16px calc(20px + var(--safe-bot)); }
+  .cgrid{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+  .cslot{ border-radius:18px; overflow:hidden; background:var(--glass); border:var(--stroke); box-shadow:var(--hl); aspect-ratio:4/5; position:relative; }
+  .cslot img{ width:100%; height:100%; object-fit:cover; }
+  .cslot.locked{ display:flex; align-items:center; justify-content:center; }
+  .cslot.locked span{ font-size:30px; opacity:.3; }
+  .cslot .t{ position:absolute; left:0; right:0; bottom:0; padding:8px; font-weight:800; font-size:11px; background:linear-gradient(to top,rgba(8,9,14,.9),transparent); }
+
+  #plus{ position:absolute; z-index:7; font-family:Unbounded; font-weight:800; color:#8ff0e0; font-size:20px; pointer-events:none; opacity:0; text-shadow:0 2px 8px rgba(0,0,0,.5); }
+  #toast{ position:absolute; z-index:11; left:50%; top:40%; transform:translateX(-50%); background:var(--glass-2); border:var(--stroke); box-shadow:var(--shadow),var(--hl);
+    color:var(--ink); font-weight:800; font-size:13px; padding:10px 16px; border-radius:14px; opacity:0; pointer-events:none; transition:opacity .25s,transform .25s; white-space:nowrap; }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(-6px); }
+</style>
+</head>
+<body>
+<div id="backdrop"><img src="assets/bg/dvor_courier.jpg" alt=""></div>
+<div id="stage">
+  <img id="scene" src="assets/bg/dvor_courier.jpg" alt="">
+
+  <div class="hud">
+    <div class="pill">🪙 <span id="coins">0</span></div>
+    <div class="sp"></div>
+    <div class="pill"><span id="rate">+0</span><span class="lbl">/с</span></div>
+    <div class="icobtn" id="soundBtn">🔇</div>
+  </div>
+
+  <div class="biz">
+    <div class="bizchip on">🛵 Доставка</div>
+    <div class="bizchip">📦 <span class="lock">Котопункт 🔒</span></div>
+    <div class="bizchip">🎥 <span class="lock">Мяустрим 🔒</span></div>
+    <div class="bizchip">🤖 <span class="lock">КотGPT 🔒</span></div>
+  </div>
+
+  <div class="bizTitle"><h1>Кот-курьер</h1><p>Объединяй курьеров — растёт доход</p></div>
+
+  <div id="boardWrap" class="glass"><div id="board"></div></div>
+
+  <div class="dock">
+    <div class="dbtn" id="memBtn">🖼️<small>Мемы</small><span class="badge" id="memBadge" style="display:none">!</span></div>
+    <button id="hireBtn">🐱 Нанять кота<small id="hireCost">10 🪙</small></button>
+    <div class="dbtn" id="boostBtn">⚡<small>×2</small></div>
+  </div>
+
+  <div id="reveal"><div class="mcard" id="mcard"></div></div>
+
+  <div class="modal" id="mem">
+    <div class="mHead"><h2>🖼️ Мем-карты · Доставка</h2><div class="x" id="memClose">✕</div></div>
+    <div class="mBody"><div class="cgrid" id="cgrid"></div></div>
+  </div>
+
+  <div id="plus"></div>
+  <div id="toast"></div>
+</div>
+
+<script>
+"use strict";
+/* ===== Мяу-Корпорация · грей-бокс: бизнес «Доставка» (мерж котов-курьеров) ===== */
+
+// ранги курьера: доход/сек по рангу + мем-карта, открывающаяся при первом достижении
+var RANKS = [
+  null,
+  { n:"Стажёр",        inc:1,   card:"door",     pl:"Оставил заказ у двери. Дверь была не та." },
+  { n:"Курьер",        inc:5,   card:"scooter",  pl:"Правила — для тех, кто не опаздывает." },
+  { n:"Старший курьер",inc:24,  card:"orders47", pl:"47 заказов. Один я." },
+  { n:"Директор",      inc:120, card:"squished", pl:"Заказ доехал. Содержимое — вопрос." },
+  { n:"CEO доставки",  inc:600, card:"sushi",    pl:"Это была рыба. Я курьер. Вы всё понимаете." }
+];
+var CELLS = 16;
+var S = { coins:30, grid:new Array(CELLS).fill(0), hires:0, seen:{}, cards:{} };
+
+// ---- элементы ----
+var boardEl=document.getElementById('board'), coinsEl=document.getElementById('coins'), rateEl=document.getElementById('rate'),
+    hireBtn=document.getElementById('hireBtn'), hireCost=document.getElementById('hireCost'),
+    reveal=document.getElementById('reveal'), mcard=document.getElementById('mcard'), plus=document.getElementById('plus'), toastEl=document.getElementById('toast');
+var sel=-1;
+
+// ---- сохранение ----
+var SK="myaucorp_dostavka_v1";
+function save(){ try{ localStorage.setItem(SK, JSON.stringify(S)); }catch(e){} }
+function load(){ try{ var r=localStorage.getItem(SK); if(r){ var o=JSON.parse(r);
+  S.coins=o.coins||30; S.grid=(o.grid&&o.grid.length===CELLS)?o.grid:new Array(CELLS).fill(0); S.hires=o.hires||0; S.seen=o.seen||{}; S.cards=o.cards||{}; } }catch(e){} }
+
+// ---- экономика ----
+function rate(){ var r=0; for(var i=0;i<CELLS;i++){ if(S.grid[i])r+=RANKS[S.grid[i]].inc; } return r; }
+function hireCostVal(){ return Math.round(10*Math.pow(1.18,S.hires)); }
+function fmt(n){ n=Math.floor(n); if(n<1000)return ""+n; if(n<1e6)return (n/1e3).toFixed(n<1e4?1:0).replace(/\.0$/,'')+"K"; if(n<1e9)return (n/1e6).toFixed(2).replace(/\.?0+$/,'')+"M"; return (n/1e9).toFixed(2).replace(/\.?0+$/,'')+"B"; }
+function renderTop(){ coinsEl.textContent=fmt(S.coins); rateEl.textContent="+"+fmt(rate()); hireCost.textContent=fmt(hireCostVal())+" 🪙"; hireBtn.disabled=S.coins<hireCostVal(); updateBadge(); }
+
+// живой доход
+setInterval(function(){ if(document.hidden)return; var r=rate(); if(r>0){ S.coins+=r*0.25; renderTop(); } },250);
+setInterval(save, 4000);
+
+// ---- поле ----
+function buildBoard(){ boardEl.innerHTML="";
+  for(var i=0;i<CELLS;i++){ var c=document.createElement('div'); c.className="cell"; c.dataset.i=i;
+    if(S.grid[i]){ c.classList.add('filled'); c.innerHTML='<img src="assets/cats/rank'+S.grid[i]+'.jpg"><div class="rk">'+S.grid[i]+'</div>'; }
+    boardEl.appendChild(c);
+  }
+}
+boardEl.addEventListener('click', function(e){ var c=e.target.closest('.cell'); if(!c)return; var i=+c.dataset.i;
+  if(!S.grid[i]){ sel=-1; refreshSel(); return; }
+  if(sel<0){ sel=i; refreshSel(); return; }
+  if(sel===i){ sel=-1; refreshSel(); return; }
+  if(S.grid[sel]===S.grid[i] && S.grid[i]<5){ doMerge(sel,i); }
+  else { sel=i; refreshSel(); }
+});
+function refreshSel(){ var cells=boardEl.children; for(var i=0;i<cells.length;i++) cells[i].classList.toggle('sel', i===sel); }
+function doMerge(a,b){ var nr=S.grid[a]+1; S.grid[a]=0; S.grid[b]=nr; sel=-1;
+  buildBoard(); var tgt=boardEl.children[b]; tgt.classList.add('pop'); blip('merge'); vibrate(18); renderTop(); save();
+  if(!S.seen[nr]){ S.seen[nr]=1; setTimeout(function(){ showCard(nr); }, 260); }
+}
+
+// ---- найм ----
+hireBtn.addEventListener('click', function(){ var cost=hireCostVal(); if(S.coins<cost)return;
+  var idx=S.grid.indexOf(0); if(idx<0){ toast("Поле заполнено — объединяй!"); return; }
+  S.coins-=cost; S.hires++; S.grid[idx]=1; buildBoard();
+  var c=boardEl.children[idx]; c.classList.add('pop'); blip('hire'); vibrate(12); renderTop(); save();
+  if(!S.seen[1]){ S.seen[1]=1; setTimeout(function(){ showCard(1); }, 260); }
+});
+
+// ---- мем-карта реавил ----
+function showCard(rank){ var R=RANKS[rank]; var isNew=!S.cards[R.card]; S.cards[R.card]=1;
+  mcard.innerHTML='<div class="ph"><img src="assets/cards/'+R.card+'.jpg"><div class="cap">'+(isNew?'<span class="new">✦ НОВАЯ МЕМ-КАРТА</span>':'')+
+    '<div class="pl">«'+R.pl+'»</div></div></div>'+
+    '<div class="foot"><button class="close" id="mcClose">Забрать</button><button class="share" id="mcShare">🔗 Поделиться</button></div>';
+  reveal.classList.add('show'); blip('win'); updateBadge(); save();
+  document.getElementById('mcClose').onclick=function(){ reveal.classList.remove('show'); };
+  document.getElementById('mcShare').onclick=function(){ reveal.classList.remove('show'); toast("Шеринг в ВК/ОК — в боевой версии"); };
+}
+
+// ---- коллекция ----
+var CARD_LIST=[{k:"door",n:"У не той двери"},{k:"scooter",n:"Мимо знака 5"},{k:"orders47",n:"47 заказов"},{k:"squished",n:"Помятый заказ"},{k:"sushi",n:"Это была рыба"}];
+document.getElementById('memBtn').onclick=function(){ buildMem(); document.getElementById('mem').classList.add('show'); };
+document.getElementById('memClose').onclick=function(){ document.getElementById('mem').classList.remove('show'); };
+function buildMem(){ var g=document.getElementById('cgrid'); g.innerHTML="";
+  CARD_LIST.forEach(function(c){ var got=S.cards[c.k]; var el=document.createElement('div'); el.className="cslot"+(got?"":" locked");
+    el.innerHTML=got?('<img src="assets/cards/'+c.k+'.jpg"><div class="t">'+c.n+'</div>'):'<span>🖼️</span>';
+    g.appendChild(el); });
+}
+function updateBadge(){ var got=0; CARD_LIST.forEach(function(c){ if(S.cards[c.k])got++; });
+  document.getElementById('memBadge').style.display = got>0 ? "block":"none";
+  document.getElementById('memBadge').textContent = got; }
+
+// ---- буст-заглушка ----
+document.getElementById('boostBtn').onclick=function(){ toast("×2 доход за рекламу — в боевой версии"); };
+
+// ---- звук ----
+var soundOn=false, actx=null;
+document.getElementById('soundBtn').onclick=function(){ soundOn=!soundOn; this.textContent=soundOn?"🔊":"🔇";
+  if(soundOn&&!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } };
+function blip(k){ if(!soundOn||!actx)return; var o=actx.createOscillator(),g=actx.createGain(); o.connect(g); g.connect(actx.destination);
+  var t=actx.currentTime,f=520; if(k==="hire")f=440; else if(k==="merge")f=620; else if(k==="win")f=720;
+  o.type=k==="win"?"sine":"triangle"; o.frequency.setValueAtTime(f,t); g.gain.setValueAtTime(.0001,t);
+  g.gain.exponentialRampToValueAtTime(.14,t+.02); g.gain.exponentialRampToValueAtTime(.0001,t+.25);
+  if(k==="win"){ o.frequency.setValueAtTime(720,t); o.frequency.setValueAtTime(960,t+.1);} o.start(t); o.stop(t+.28); }
+function vibrate(p){ if(navigator.vibrate)try{ navigator.vibrate(p);}catch(e){} }
+
+// ---- тост ----
+var tT=null; function toast(m){ toastEl.textContent=m; toastEl.classList.add('show'); clearTimeout(tT); tT=setTimeout(function(){ toastEl.classList.remove('show'); },1700); }
+
+// ---- пауза ----
+document.addEventListener('visibilitychange', function(){ if(document.hidden) save(); });
+addEventListener('pagehide', save);
+
+// ---- старт ----
+load(); buildBoard(); renderTop();
+</script>
+</body>
+</html>
