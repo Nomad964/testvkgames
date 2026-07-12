@@ -160,8 +160,14 @@
   <div id="toast"></div>
 </div>
 
+<script src="vendor/vk-bridge.min.js"></script>
 <script>
 "use strict";
+/* ===== VK bootstrap: без раннего VKWebAppInit мини-апп НЕ стартует в ВК (урок 3) ===== */
+var VKB = (window.vkBridge && window.vkBridge.send) ? window.vkBridge : null;
+try{ if(VKB){ VKB.send('VKWebAppInit', {}); } }catch(e){}
+try{ if(VKB && VKB.subscribe){ VKB.subscribe(function(e){ /* задел под события ВК */ }); } }catch(e){}
+
 /* ===== Мяу-Корпорация · грей-бокс: бизнес «Доставка» (drag-мерж курьеров) ===== */
 
 var RANKS = [ null,
